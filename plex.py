@@ -117,7 +117,9 @@ if __name__ == '__main__':
                     'tv-y7' : 'TV Parental Guidelines',
                     'tv-g' : 'TV Parental Guidelines',
                     'tv-pg' : 'TV Parental Guidelines',
+                    'tvpg' : 'TV Parental Guidelines',
                     'tv-14' : 'TV Parental Guidelines',
+                    'tv14' : 'TV Parental Guidelines',
                     'tv-ma' : 'TV Parental Guidelines',
                     'g' : 'MPAA',
                     'pg' : 'MPAA',
@@ -144,7 +146,9 @@ if __name__ == '__main__':
                     'tv-y7' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/TV-Y7_icon.svg/240px-TV-Y7_icon.svg.png',
                     'tv-g' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/TV-G_icon.svg/240px-TV-G_icon.svg.png',
                     'tv-pg' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/TV-PG_icon.svg/240px-TV-PG_icon.svg.png',
+                    'tvpg' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/TV-PG_icon.svg/240px-TV-PG_icon.svg.png',
                     'tv-14' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/TV-14_icon.svg/240px-TV-14_icon.svg.png',
+                    'tv14' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/TV-14_icon.svg/240px-TV-14_icon.svg.png',
                     'tv-ma' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/TV-MA_icon.svg/240px-TV-MA_icon.svg.png',
                     'g' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/RATED_G.svg/276px-RATED_G.svg.png',
                     'pg' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/RATED_PG.svg/320px-RATED_PG.svg.png',
@@ -557,7 +561,7 @@ if __name__ == '__main__':
                     xml += '\n\t\t</rating>' #end rating key
                 except KeyError:
                     keyErrors_contentRating.append(program_list[x]['contentRating'])
-                    errorDetails_contentRating.append('Title: ' + program_list[x]['title'] + ', GrandparentTitle: ' + program_list[x]['grandparentTitle'])
+                    errorDetails_contentRating.append('Title: ' + program_list[x]['title'] + ', GrandparentTitle: ' + program_list[x]['grandparentTitle'] if 'grandparentTitle' in program_list[x] else None)
             
             if program_list[x]['premiere'] == False: #if not premiere add the previously shown tag
                 if timeOriginal != "": #if we have the originallyAvailableAt add it to the tag
