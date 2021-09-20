@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import requests
-import time
-from datetime import datetime, date
-import dateutil.parser
 import html
+import time
+from datetime import datetime
+from os import path
+
+import dateutil.parser
+import requests
+
+import cache
 
 #url variables
 type = '1%2C4'
@@ -44,7 +48,9 @@ if __name__ == '__main__':
     
     #argparse
     parser = argparse.ArgumentParser(description="Python script to convert plex livetv guide into xml/m3u format.", formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('--debug', type=bool, required=False, default=False, help='Debug flag.')
     parser.add_argument('-t', '--token', type=str, nargs=1, required=True, help='Token is required. Follow Plex instructions for finding the token. https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/#toc-0')
+    parser.add_argument('--lineup-id', type=str, nargs=1, required=False, default=[''], help='Generate xmltv file from a particular Broadcast lineup.')
     parser.add_argument('-d', '--days', type=int, nargs=1, required=False, default=[7], help='Days of info to collect. Max if 21.')
     parser.add_argument('-p', '--pastdays', type=int, nargs=1, required=False, default=[0], help='Days in past of info to collect. Max is 1.')
     parser.add_argument('-l', '--language', type=str, nargs=1, required=False, default=['en'], help='Plex language... Get from url same as token.')
@@ -66,6 +72,7 @@ if __name__ == '__main__':
     #string agruments
     x_plex_token = quote_remover(opts.token[0])
     x_plex_language = quote_remover(opts.language[0])
+    lineup_id = quote_remover(opts.lineup_id[0])
     xml_destination = quote_remover(opts.xmlFile[0])
     m3u_destination = quote_remover(opts.m3uFile[0])
     prefix = quote_remover(opts.prefix[0])
@@ -80,12 +87,14 @@ if __name__ == '__main__':
     startNumber = opts.startNumber[0]
     
     #bool arguments
+    debug = opts.debug
     makeXML = opts.xml
     makeM3U = opts.m3u
     keepNumber = opts.keepNumber
     streamlink = opts.streamlink
     
     print('token: ' + x_plex_token)
+    print('lineup_id: ' + lineup_id)
     print('language: ' + x_plex_language)
     print('days: ' + str(days_future))
     print('pastdays: ' + str(days_past))
@@ -334,10 +343,59 @@ if __name__ == '__main__':
         interval_b = int(interval_a + day)
         
         #url = 'https://epg.provider.plex.tv/grid?type=' + type + '&sort=beginsAt&endsAt%3E=' + str(interval_a) + '&beginsAt%3C=' + str(interval_b) + '&X-Plex-Product=' + x_plex_product + '&X-Plex-Version=' + x_plex_version + '&X-Plex-Client-Identifier=' + x_plex_client_identifer + '&X-Plex-Platform=' + x_plex_platform + '&X-Plex-Platform-Version=' + x_plex_platform_version + '&X-Plex-Sync-Version=' + x_plex_sync_version + '&X-Plex-Features=' + x_plex_features + '&X-Plex-Model=' + x_plex_model + '&X-Plex-Device=' + x_plex_device + '&X-Plex-Device-Screen-Resolution=' + x_plex_device_screen_resolution + '&X-Plex-Token=' + x_plex_token + '&X-Plex-Language=' + x_plex_language + '&X-Plex-Drm=' + x_plex_drm + '&X-Plex-Text-Format=' + x_plex_text_format + '&X-Plex-Provider-Version=' + x_plex_provider_version
-        url = 'https://epg.provider.plex.tv/grid?type=' + type + '&sort=beginsAt&endsAt%3E=' + str(interval_a) + '&beginsAt%3C=' + str(interval_b) + '&X-Plex-Token=' + x_plex_token + '&X-Plex-Language=' + x_plex_language
+        # https://epg.provider.plex.tv/lineups?country=US&postalCode=30332&X-Plex-Token=
+        # https://epg.provider.plex.tv/lineups/5fc76e491f5e19002dfda572/channels?X-Plex-Token=
+        # https://epg.provider.plex.tv/library/metadata/5fc6ad15b360df002ddfbaf5?X-Plex-Token=&X-Plex-Language=en
+        # https://epg.provider.plex.tv/grid?beginsAt%3C=1633132800&channel=5fc705f27c6557002ee1eaaa&endsAt%3E=1632528000&X-Plex-Api-Token=&X-Plex-Language=en
 
-        print('url[' + str(x+1) + ']: ' + url)
-        grid = load_json(url)
+        if lineup_id:
+            if makeM3U:
+                raise ValueError('M3U not supoported with lineup id option.')
+
+            cachefile = f'plex-epg-{lineup_id}.pickle'
+            if opts.debug and path.isfile(cachefile):
+                print('Loading data from cache')
+                grid = cache.loadData(cachefile)
+            else:
+                print('Fetching data from API')
+                channels_url = f'https://epg.provider.plex.tv/lineups/{lineup_id}/channels?X-Plex-Token={x_plex_token}'
+                channels_data = load_json(channels_url)
+                channel_keys = [channel['gridKey'] for channel in channels_data['MediaContainer']['Channel']]
+                grid = {}
+                for idx, grid_key in enumerate(channel_keys):
+                    grid_url = f'https://epg.provider.plex.tv/grid?beginsAt%3C={interval_b}&channel={grid_key}&endsAt%3E={interval_a}&X-Plex-Api-Token={x_plex_token}&X-Plex-Language={x_plex_language}'
+                    print(f'grid_url[{str(idx+1)}]: {grid_url}')
+                    grid_data = load_json(grid_url)
+
+                    for metadata, media_list in map(lambda metadata: (metadata, metadata['Media']), grid_data['MediaContainer']['Metadata']):
+                        channel = [x for x in channels_data['MediaContainer']['Channel'] if x['gridKey'] == grid_key][0]
+                        for media in media_list:
+                            media['channelIdentifier'] = channel['id']
+                            media['protocol'] = ''
+                            media['channelArt'] = ''
+                            media['channelShortTitle'] = channel['title'].strip()
+                            media['channelThumb'] = channel['thumb'] if 'thumb' in channel else ''
+                            media['channelTitle'] = channel['title'].strip()
+                            media['channelVcn'] = channel['vcn']
+
+                    if grid.keys():
+                        grid['MediaContainer']['Metadata'].extend(grid_data['MediaContainer']['Metadata'])
+                        grid['MediaContainer']['totalSize'] += grid_data['MediaContainer']['totalSize']
+                        grid['MediaContainer']['size'] += grid_data['MediaContainer']['size']
+                    else:
+                        grid = {**grid, **grid_data}
+
+                    # if idx > 1:
+                    #     break
+
+                if opts.debug:
+                    cache.storeData(cachefile, grid)
+        else:
+            url = ('https://epg.provider.plex.tv/grid?type=' + type + '&sort=beginsAt&endsAt%3E=' + str(interval_a) +
+                '&beginsAt%3C=' + str(interval_b) + '&X-Plex-Token=' + x_plex_token + '&X-Plex-Language=' + x_plex_language)
+
+            print('url[' + str(x+1) + ']: ' + url)
+            grid = load_json(url)
         
         #with open('plex_xml_' + str(x) + '.json', 'w') as write_file:
         #    json.dump(grid, write_file, indent=4)
