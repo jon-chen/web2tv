@@ -51,6 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', type=bool, required=False, default=False, help='Debug flag.')
     parser.add_argument('-t', '--token', type=str, nargs=1, required=True, help='Token is required. Follow Plex instructions for finding the token. https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/#toc-0')
     parser.add_argument('--lineup-id', type=str, nargs=1, required=False, default=[''], help='Generate xmltv file from a particular Broadcast lineup.')
+    parser.add_argument('--vcn-list', type=str, nargs='*', required=False, default=[], help='Paired with lineup-id, retrieves only the listed vcns to add to the xmltv file.')
     parser.add_argument('-d', '--days', type=int, nargs=1, required=False, default=[7], help='Days of info to collect. Max if 21.')
     parser.add_argument('-p', '--pastdays', type=int, nargs=1, required=False, default=[0], help='Days in past of info to collect. Max is 1.')
     parser.add_argument('-l', '--language', type=str, nargs=1, required=False, default=['en'], help='Plex language... Get from url same as token.')
@@ -73,6 +74,7 @@ if __name__ == '__main__':
     x_plex_token = quote_remover(opts.token[0])
     x_plex_language = quote_remover(opts.language[0])
     lineup_id = quote_remover(opts.lineup_id[0])
+    vcn_list = opts.vcn_list
     xml_destination = quote_remover(opts.xmlFile[0])
     m3u_destination = quote_remover(opts.m3uFile[0])
     prefix = quote_remover(opts.prefix[0])
@@ -95,6 +97,7 @@ if __name__ == '__main__':
     
     print('token: ' + x_plex_token)
     print('lineup_id: ' + lineup_id)
+    print('vcn_list: ' + str(vcn_list))
     print('language: ' + x_plex_language)
     print('days: ' + str(days_future))
     print('pastdays: ' + str(days_past))
@@ -360,7 +363,10 @@ if __name__ == '__main__':
                 print('Fetching data from API')
                 channels_url = f'https://epg.provider.plex.tv/lineups/{lineup_id}/channels?X-Plex-Token={x_plex_token}'
                 channels_data = load_json(channels_url)
-                channel_keys = [channel['gridKey'] for channel in channels_data['MediaContainer']['Channel']]
+                
+                # filter by vcn_list, if available
+                channel_keys = [channel['gridKey'] for channel in channels_data['MediaContainer']['Channel'] if not vcn_list or (vcn_list and channel['vcn'] in vcn_list)]
+
                 grid = {}
                 for idx, grid_key in enumerate(channel_keys):
                     grid_url = f'https://epg.provider.plex.tv/grid?beginsAt%3C={interval_b}&channel={grid_key}&endsAt%3E={interval_a}&X-Plex-Api-Token={x_plex_token}&X-Plex-Language={x_plex_language}'
@@ -383,7 +389,7 @@ if __name__ == '__main__':
                         grid['MediaContainer']['totalSize'] += grid_data['MediaContainer']['totalSize']
                         grid['MediaContainer']['size'] += grid_data['MediaContainer']['size']
                     else:
-                        grid = {**grid, **grid_data}
+                        grid = grid_data
 
                     # if idx > 1:
                     #     break
